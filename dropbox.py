@@ -59,7 +59,7 @@ class DropboxUploader:
 
 #Change those variables 
 root_dir = '/path/to/the/folder'
-site = 'site'
+site = 'site' # name of a Dropbox folder
 database = 'dropbox_db'
 #https://dropbox.github.io/dropbox-api-v2-explorer/#auth_token/revoke
 dropbox_token = 'access token'
