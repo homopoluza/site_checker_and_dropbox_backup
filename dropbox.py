@@ -6,12 +6,18 @@ import shutil
 from datetime import datetime, timedelta
 
 class DropboxUploader:
-    def __init__(self, dropbox_token, CHUNK_SIZE, path, days):
-        self.dropbox_token = dropbox_token
+    def __init__(self, CHUNK_SIZE, path, days, app_key, app_secret, refresh_token):
         self.CHUNK_SIZE = CHUNK_SIZE
         self.path = path
-        self.dbx = dropbox.Dropbox(dropbox_token)
         self.days = days
+        self.app_key = app_key
+        self.app_secret = app_secret
+        self.refresh_token = refresh_token
+        self.dbx = dropbox.Dropbox(
+            oauth2_refresh_token=refresh_token,
+            app_key=app_key,
+            app_secret=app_secret
+        )
 
     def check_folder_exists(self):
         try:
@@ -58,13 +64,17 @@ class DropboxUploader:
             print(f"Failed to delete old files: {err}")
 
 #Change those variables 
-root_dir = '/path/to/the/folder'
+root_dir = '/path/to/the/root/dir'
 site = 'site' # name of a Dropbox folder
-database = 'dropbox_db'
-#https://dropbox.github.io/dropbox-api-v2-explorer/#auth_token/revoke
-dropbox_token = 'access token'
+database = 'dropbox'
 days = 1 # delete files older than days
-CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+
+CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
+APP_KEY = ''
+APP_SECRET = ''
+#Get AUTHORIZATION_CODE https://www.dropbox.com/oauth2/authorize?client_id={APP_KEY}&response_type=code&token_access_type=offline
+#Get permanent REFRESH_TOKEN https://api.dropboxapi.com/oauth2/token?code=AUTHORIZATION_CODE&grant_type=authorization_code&client_id=APP_KEY&client_secret=APP_SECRET
+REFRESH_TOKEN = ''
 
 dropbox_path = "/" + site
 archive_name = site + '_' + datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -80,7 +90,7 @@ subprocess.run(command, shell=True)
 archive_size = os.path.getsize(f"./{archive_name}")
 database_dump_size = os.path.getsize(f"./{database_dump_name}")
 
-uploader = DropboxUploader(dropbox_token, CHUNK_SIZE, dropbox_path, days)
+uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, REFRESH_TOKEN)
 uploader.upload(archive_name, archive_size)
 uploader.upload(database_dump_name, database_dump_size)
 uploader.delete_old_files()
