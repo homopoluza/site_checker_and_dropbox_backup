@@ -94,3 +94,5 @@ uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, 
 uploader.upload(archive_name, archive_size)
 uploader.upload(database_dump_name, database_dump_size)
 uploader.delete_old_files()
+os.remove(archive_name)
+os.remove(database_dump_name)
