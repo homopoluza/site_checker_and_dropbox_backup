@@ -4,6 +4,8 @@ import dropbox
 from dropbox.exceptions import ApiError
 import shutil
 from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
 
 class DropboxUploader:
     def __init__(self, CHUNK_SIZE, path, days, app_key, app_secret, refresh_token):
@@ -32,21 +34,48 @@ class DropboxUploader:
     def create_folder(self):
         self.dbx.files_create_folder_v2(self.path)
 
-    def upload(self, file_name, file_size):
-        if not self.check_folder_exists():
-            self.create_folder()
+    def upload(self, file_name, file_size, max_retries=3):
+        retries = 0
+        while retries < max_retries:
+            try:
+                if not self.check_folder_exists():
+                    self.create_folder()
 
-        with open(f"{pwd}/{file_name}", 'rb') as f:
-            upload_session_start_result = self.dbx.files_upload_session_start(f.read(self.CHUNK_SIZE))
-            cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id, offset=f.tell())
-            commit = dropbox.files.CommitInfo(path=f"{self.path}/{file_name}")
+                with open(f"{pwd}/{file_name}", 'rb') as f:
+                    upload_session_start_result = self.dbx.files_upload_session_start(f.read(self.CHUNK_SIZE))
+                    cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id, offset=f.tell())
+                    commit = dropbox.files.CommitInfo(path=f"{self.path}/{file_name}")
 
-            while f.tell() < file_size:
-                if ((file_size - f.tell()) <= self.CHUNK_SIZE):
-                    self.dbx.files_upload_session_finish(f.read(self.CHUNK_SIZE), cursor, commit)
-                else:
-                    self.dbx.files_upload_session_append_v2(f.read(self.CHUNK_SIZE), cursor)
-                    cursor.offset = f.tell()
+                    while f.tell() < file_size:
+                        if ((file_size - f.tell()) <= self.CHUNK_SIZE):
+                            self.dbx.files_upload_session_finish(f.read(self.CHUNK_SIZE), cursor, commit)
+                        else:
+                            self.dbx.files_upload_session_append_v2(f.read(self.CHUNK_SIZE), cursor)
+                            cursor.offset = f.tell()
+                break
+            except ApiError as api_err:
+                retries += 1
+                if retries == max_retries:
+                    self.send_email(site, api_err)
+
+    def send_email(self, site, api_err):
+        # Email settings
+        smtp_server = ''
+        smtp_port = 
+        email_login = ''
+        email_password = ''
+        email_to = ''
+
+        msg = MIMEText(f"The site {site} returned status code or error {api_err}.")
+        msg['Subject'] = f"{site} - backup {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        msg['From'] = email_login
+        msg['To'] = email_to
+
+        s = smtplib.SMTP(smtp_server, smtp_port)
+        s.starttls()
+        s.login(email_login, email_password)
+        s.send_message(msg)
+        s.quit()
 
     def delete_old_files(self):
         try:
@@ -64,9 +93,9 @@ class DropboxUploader:
             print(f"Failed to delete old files: {err}")
 
 #Change those variables 
-root_dir = '/path/to/the/root/dir'
+root_dir = '/path/to/root/dir'
 site = 'site' # name of a Dropbox folder
-database = 'dropbox'
+database = 'dropbox_db'
 days = 1 # delete files older than days
 
 CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
@@ -84,7 +113,7 @@ pwd = os.getcwd()
 archive_path = shutil.make_archive(archive_name, 'tar', root_dir)
 archive_name = os.path.basename(archive_path)
 
-command = f"mysqldump -u root {database} > {database_dump_name}"
+command = f"sudo mysqldump -u root {database} > {database_dump_name}"
 subprocess.run(command, shell=True)
 
 archive_size = os.path.getsize(f"./{archive_name}")
