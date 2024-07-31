@@ -34,17 +34,18 @@ class DropboxUploader:
     def create_folder(self):
         self.dbx.files_create_folder_v2(self.path)
 
-    def upload(self, file_name, file_size, max_retries=3):
+    def upload_file(self, file_name, file_size, max_retries=3, bitrix=False):
         retries = 0
+        relative_path = os.path.basename(file_name)
         while retries < max_retries:
             try:
-                if not self.check_folder_exists():
+                if not self.check_folder_exists and not bitrix:
                     self.create_folder()
-
-                with open(f"{pwd}/{file_name}", 'rb') as f:
+            
+                with open(file_name, 'rb') as f:
                     upload_session_start_result = self.dbx.files_upload_session_start(f.read(self.CHUNK_SIZE))
                     cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id, offset=f.tell())
-                    commit = dropbox.files.CommitInfo(path=f"{self.path}/{file_name}")
+                    commit = dropbox.files.CommitInfo(path=f"{self.path}/{relative_path}")
 
                     while f.tell() < file_size:
                         if ((file_size - f.tell()) <= self.CHUNK_SIZE):
@@ -58,10 +59,19 @@ class DropboxUploader:
                 if retries == max_retries:
                     self.send_email(site, api_err)
 
+    def upload_folder(self, folder_path, bitrix=True):
+        if not bitrix and not self.check_folder_exists():
+            self.create_folder()
+        for root, dirs, files in os.walk(folder_path):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                file_size = os.path.getsize(file_path)
+                self.upload_file(file_path, file_size, bitrix=bitrix)
+
     def send_email(self, site, api_err):
         # Email settings
         smtp_server = ''
-        smtp_port = 
+        smtp_port = 587
         email_login = ''
         email_password = ''
         email_to = ''
@@ -93,10 +103,10 @@ class DropboxUploader:
             print(f"Failed to delete old files: {err}")
 
 #Change those variables 
-root_dir = '/path/to/root/dir'
+root_dir = '/path/to/'
 site = 'site' # name of a Dropbox folder
-database = 'dropbox_db'
-days = 1 # delete files older than days
+database = 'db_name'
+days = 1 # delete Drpbox files older than days
 
 CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
 APP_KEY = ''
@@ -113,15 +123,16 @@ pwd = os.getcwd()
 archive_path = shutil.make_archive(archive_name, 'tar', root_dir)
 archive_name = os.path.basename(archive_path)
 
-command = f"sudo mysqldump -u root {database} > {database_dump_name}"
+command = f"mysqldump -u root {database} > {database_dump_name}"
 subprocess.run(command, shell=True)
 
 archive_size = os.path.getsize(f"./{archive_name}")
 database_dump_size = os.path.getsize(f"./{database_dump_name}")
 
 uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, REFRESH_TOKEN)
-uploader.upload(archive_name, archive_size)
-uploader.upload(database_dump_name, database_dump_size)
+uploader.upload_file(archive_name, archive_size)
+uploader.upload_file(database_dump_name, database_dump_size)
+# uploader.upload_folder(root_dir) # only for bitrix/backup folder
 uploader.delete_old_files()
 os.remove(archive_name)
 os.remove(database_dump_name)
