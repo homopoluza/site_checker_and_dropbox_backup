@@ -7,3 +7,4 @@ This script verifies the availability of websites listed in `site.txt`, which mu
 ## dropbox.py
 
 The `dropbox.py` script automates the creation of `.sql` database dumps and `.tar` archives, storing them in Dropbox. It also deletes files older than  the `days` variable. 
+For uploading the `/home/bitrix/www/bitrix/backup` folder use the `upload_folder` method.
