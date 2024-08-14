@@ -105,46 +105,43 @@ class DropboxUploader:
         except ApiError as err:
             print(f"Failed to delete old files: {err}")
 
-#Change those variables 
-root_dir = '/path/to/'
-site = 'site' # name of a Dropbox folder
-database = 'db_name'
-days = 1 # delete Drpbox files older than days
+if __name__ == "__main__":
 
-CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
-APP_KEY = ''
-APP_SECRET = ''
-#Get AUTHORIZATION_CODE https://www.dropbox.com/oauth2/authorize?client_id={APP_KEY}&response_type=code&token_access_type=offline
-#Get permanent REFRESH_TOKEN https://api.dropboxapi.com/oauth2/token?code=AUTHORIZATION_CODE&grant_type=authorization_code&client_id=APP_KEY&client_secret=APP_SECRET
-REFRESH_TOKEN = ''
+    #Change those variables 
+    root_dir = '/path/to/'
+    site = 'site' # name of a Dropbox folder
+    database = 'db_name'
+    days = 1 # delete Drpbox files older than days
+    bitrix_framework = False
 
-dropbox_path = "/" + site
-archive_name = site + '_' + datetime.now().strftime("%Y%m%d_%H%M%S")
-database_dump_name = database + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.sql'
-pwd = os.getcwd()
+    CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
+    APP_KEY = ''
+    APP_SECRET = ''
+    #Get AUTHORIZATION_CODE https://www.dropbox.com/oauth2/authorize?client_id={APP_KEY}&response_type=code&token_access_type=offline
+    #Get permanent REFRESH_TOKEN https://api.dropboxapi.com/oauth2/token?code=AUTHORIZATION_CODE&grant_type=authorization_code&client_id=APP_KEY&client_secret=APP_SECRET
+    REFRESH_TOKEN = ''
 
-archive_path = shutil.make_archive(archive_name, 'tar', root_dir)
-archive_name = os.path.basename(archive_path)
+    dropbox_path = "/" + site
+    uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, REFRESH_TOKEN)
+    archive_uploaded = False
+    database_uploaded = False
+    folder_uploaded = False
 
-command = f"mysqldump -u root {database} > {database_dump_name}"
-subprocess.run(command, shell=True)
+    if bitrix_framework:
+        folder_uploaded = uploader.upload_folder(root_dir)
+    else:
+        archive_name = site + '_' + datetime.now().strftime("%Y%m%d_%H%M%S")
+        database_dump_name = database + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.sql'
+        archive_path = shutil.make_archive(archive_name, 'tar', root_dir)
+        archive_name = os.path.basename(archive_path)
+        command = f"mysqldump -u root {database} > {database_dump_name}"
+        subprocess.run(command, shell=True)
+        archive_size = os.path.getsize(f"./{archive_name}")
+        database_dump_size = os.path.getsize(f"./{database_dump_name}")
+        archive_uploaded = uploader.upload_file(archive_name, archive_size)
+        database_uploaded = uploader.upload_file(database_dump_name, database_dump_size)
+        os.remove(archive_name)
+        os.remove(database_dump_name)
 
-archive_size = os.path.getsize(f"./{archive_name}")
-database_dump_size = os.path.getsize(f"./{database_dump_name}")
-
-uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, REFRESH_TOKEN)
-
-archive_uploaded = False
-database_uploaded = False
-folder_uploaded = False
-
-archive_uploaded = uploader.upload_file(archive_name, archive_size)
-database_uploaded = uploader.upload_file(database_dump_name, database_dump_size)
-
-# folder_uploaded = uploader.upload_folder(root_dir) # only for bitrix/backup folder
-
-if (archive_uploaded and database_uploaded) or folder_uploaded:
-    uploader.delete_old_files()
-
-os.remove(archive_name)
-os.remove(database_dump_name)
+    if (archive_uploaded and database_uploaded) or folder_uploaded:
+        uploader.delete_old_files()
