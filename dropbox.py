@@ -53,11 +53,12 @@ class DropboxUploader:
                         else:
                             self.dbx.files_upload_session_append_v2(f.read(self.CHUNK_SIZE), cursor)
                             cursor.offset = f.tell()
-                break
+                return True
             except ApiError as api_err:
                 retries += 1
                 if retries == max_retries:
                     self.send_email(site, api_err)
+                    return False
 
     def upload_folder(self, folder_path, bitrix=True):
         if not bitrix and not self.check_folder_exists():
@@ -66,7 +67,9 @@ class DropboxUploader:
             for filename in files:
                 file_path = os.path.join(root, filename)
                 file_size = os.path.getsize(file_path)
-                self.upload_file(file_path, file_size, bitrix=bitrix)
+                if not self.upload_file(file_path, file_size, bitrix=bitrix):
+                    return False
+        return True
 
     def send_email(self, site, api_err):
         # Email settings
@@ -130,9 +133,18 @@ archive_size = os.path.getsize(f"./{archive_name}")
 database_dump_size = os.path.getsize(f"./{database_dump_name}")
 
 uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, REFRESH_TOKEN)
-uploader.upload_file(archive_name, archive_size)
-uploader.upload_file(database_dump_name, database_dump_size)
-# uploader.upload_folder(root_dir) # only for bitrix/backup folder
-uploader.delete_old_files()
+
+archive_uploaded = False
+database_uploaded = False
+folder_uploaded = False
+
+archive_uploaded = uploader.upload_file(archive_name, archive_size)
+database_uploaded = uploader.upload_file(database_dump_name, database_dump_size)
+
+# folder_uploaded = uploader.upload_folder(root_dir) # only for bitrix/backup folder
+
+if (archive_uploaded and database_uploaded) or folder_uploaded:
+    uploader.delete_old_files()
+
 os.remove(archive_name)
 os.remove(database_dump_name)
