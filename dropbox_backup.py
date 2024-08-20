@@ -54,7 +54,7 @@ class DropboxUploader:
                             self.dbx.files_upload_session_append_v2(f.read(self.CHUNK_SIZE), cursor)
                             cursor.offset = f.tell()
                 return True
-            except ApiError as api_err:
+            except Exception as api_err:
                 retries += 1
                 if retries == max_retries:
                     self.send_email(site, api_err)
