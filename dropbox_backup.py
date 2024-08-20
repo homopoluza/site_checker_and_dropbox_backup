@@ -102,7 +102,7 @@ class DropboxUploader:
                 # Check if the file is older than `days` days
                 if now - file_time > timedelta(days=self.days):
                     self.dbx.files_delete_v2(file.path_lower)
-        except ApiError as err:
+        except Exception as err:
             print(f"Failed to delete old files: {err}")
 
 if __name__ == "__main__":
