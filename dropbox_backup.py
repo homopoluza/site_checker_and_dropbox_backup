@@ -61,7 +61,7 @@ class DropboxUploader:
                     return False
 
     def upload_folder(self, folder_path, bitrix=True):
-        if not bitrix and not self.check_folder_exists():
+        if bitrix and not self.check_folder_exists():
             self.create_folder()
         for root, dirs, files in os.walk(folder_path):
             for filename in files:
