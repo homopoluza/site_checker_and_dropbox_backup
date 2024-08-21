@@ -43,16 +43,19 @@ class DropboxUploader:
                     self.create_folder()
             
                 with open(file_name, 'rb') as f:
-                    upload_session_start_result = self.dbx.files_upload_session_start(f.read(self.CHUNK_SIZE))
-                    cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id, offset=f.tell())
-                    commit = dropbox.files.CommitInfo(path=f"{self.path}/{relative_path}")
-
-                    while f.tell() < file_size:
-                        if ((file_size - f.tell()) <= self.CHUNK_SIZE):
-                            self.dbx.files_upload_session_finish(f.read(self.CHUNK_SIZE), cursor, commit)
-                        else:
-                            self.dbx.files_upload_session_append_v2(f.read(self.CHUNK_SIZE), cursor)
-                            cursor.offset = f.tell()
+                    if file_size <= self.CHUNK_SIZE:
+                        self.dbx.files_upload(f.read(), f"{self.path}/{relative_path}")
+                    else:
+                        upload_session_start_result = self.dbx.files_upload_session_start(f.read(self.CHUNK_SIZE))
+                        cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id, offset=f.tell())
+                        commit = dropbox.files.CommitInfo(path=f"{self.path}/{relative_path}")
+    
+                        while f.tell() < file_size:
+                            if ((file_size - f.tell()) <= self.CHUNK_SIZE):
+                                self.dbx.files_upload_session_finish(f.read(self.CHUNK_SIZE), cursor, commit)
+                            else:
+                                self.dbx.files_upload_session_append_v2(f.read(self.CHUNK_SIZE), cursor)
+                                cursor.offset = f.tell()
                 return True
             except Exception as api_err:
                 retries += 1
