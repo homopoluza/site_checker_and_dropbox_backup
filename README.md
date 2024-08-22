@@ -11,7 +11,4 @@ For uploading the `/home/bitrix/www/bitrix/backup` folder set the `bitrix_framew
 
 ### async 
 
-From documentation:  
-> There are a couple of constraints with concurrent sessions to make them work. You can not send data with meth:`files_upload_session_start` or meth:`files_upload_session_finish`.
-
 Concurrent upload is not critical right now, but there is room for improvement.
