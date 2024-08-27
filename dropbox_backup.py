@@ -6,6 +6,8 @@ import shutil
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
+import concurrent.futures
+from functools import partial
 
 class DropboxUploader:
     def __init__(self, CHUNK_SIZE, path, days, app_key, app_secret, refresh_token):
@@ -49,7 +51,7 @@ class DropboxUploader:
                         upload_session_start_result = self.dbx.files_upload_session_start(f.read(self.CHUNK_SIZE))
                         cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id, offset=f.tell())
                         commit = dropbox.files.CommitInfo(path=f"{self.path}/{relative_path}")
-    
+
                         while f.tell() < file_size:
                             if ((file_size - f.tell()) <= self.CHUNK_SIZE):
                                 self.dbx.files_upload_session_finish(f.read(self.CHUNK_SIZE), cursor, commit)
@@ -63,16 +65,27 @@ class DropboxUploader:
                     self.send_email(site, api_err)
                     return False
 
-    def upload_folder(self, folder_path, bitrix=True):
-        if bitrix and not self.check_folder_exists():
-            self.create_folder()
-        for root, dirs, files in os.walk(folder_path):
-            for filename in files:
-                file_path = os.path.join(root, filename)
-                file_size = os.path.getsize(file_path)
-                if not self.upload_file(file_path, file_size, bitrix=bitrix):
-                    return False
-        return True
+    def upload_folder(self, folder_path, bitrix=True, max_workers=5):
+        try:
+            if bitrix and not self.check_folder_exists():
+                self.create_folder()
+            
+            file_list = []
+            for root, dirs, files in os.walk(folder_path):
+                for filename in files:
+                    file_path = os.path.join(root, filename)
+                    file_size = os.path.getsize(file_path)
+                    file_list.append((file_path, file_size))
+            
+            upload_func = partial(self.upload_file, bitrix=bitrix)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                executor.map(lambda x: upload_func(*x), file_list)
+            
+            return True
+        except Exception as err:
+            self.send_email(site, err)
+            return False
 
     def send_email(self, site, api_err):
         # Email settings
@@ -93,30 +106,40 @@ class DropboxUploader:
         s.send_message(msg)
         s.quit()
 
-    def delete_old_files(self):
+    def delete_old_files(self, max_workers=10):
         try:
             files = self.dbx.files_list_folder(self.path).entries
             now = datetime.now()
 
-            for file in files:
-                # Dropbox uses UTC time for file metadata
-                file_time = file.client_modified
+            def delete_if_old(file):
+                try:
+                    # Dropbox uses UTC time for file metadata
+                    file_time = file.client_modified
 
-                # Check if the file is older than `days` days
-                if now - file_time > timedelta(days=self.days):
-                    self.dbx.files_delete_v2(file.path_lower)
+                    # Check if the file is older than `days` days
+                    if now - file_time > timedelta(days=self.days):
+                        self.dbx.files_delete_v2(file.path_lower)
+
+                except Exception as err:
+                    self.send_email(site, err)
+                    return False
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                executor.map(delete_if_old, files)
+
         except Exception as err:
-            print(f"Failed to delete old files: {err}")
-
+            self.send_email(site, err)
+        
 if __name__ == "__main__":
 
     #Change those variables 
-    root_dir = '/path/to/'
+    root_dir = 'path/to/folder'
     site = 'site' # name of a Dropbox folder
     database = 'db_name'
-    days = 1 # delete Drpbox files older than days
-    bitrix_framework = False
+    days = 1 # delete Dropbox files older than days
+    bitrix_framework = True # for bitrix CMS
 
+    #Dropbox app key, secret, and refresh token
     CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
     APP_KEY = ''
     APP_SECRET = ''
