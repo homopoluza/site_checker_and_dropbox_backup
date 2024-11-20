@@ -3,6 +3,7 @@ import os
 import dropbox
 from dropbox.exceptions import ApiError
 import shutil
+import time
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -65,7 +66,7 @@ class DropboxUploader:
                     self.send_email(site, api_err)
                     return False
 
-    def upload_folder(self, folder_path, bitrix=True, max_workers=5):
+    def upload_folder(self, folder_path, bitrix=True, max_workers=10):
         try:
             if bitrix and not self.check_folder_exists():
                 self.create_folder()
@@ -106,9 +107,18 @@ class DropboxUploader:
         s.send_message(msg)
         s.quit()
 
-    def delete_old_files(self, max_workers=10):
+    def delete_old_files(self, max_workers=7):
         try:
-            files = self.dbx.files_list_folder(self.path).entries
+            files = []
+            result = self.dbx.files_list_folder(self.path)
+            files.extend(result.entries)  
+
+            # Handle pagination 
+            while result.has_more: 
+                result = self.dbx.files_list_folder_continue(result.cursor) 
+                files.extend(result.entries)            
+
+            # now = datetime.now(timezone.utc)
             now = datetime.now()
 
             def delete_if_old(file):
@@ -119,10 +129,9 @@ class DropboxUploader:
                     # Check if the file is older than `days` days
                     if now - file_time > timedelta(days=self.days):
                         self.dbx.files_delete_v2(file.path_lower)
-
+                        time.sleep(1) # Add a delay to avoid rate limiting
                 except Exception as err:
                     self.send_email(site, err)
-                    return False
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 executor.map(delete_if_old, files)
@@ -133,13 +142,12 @@ class DropboxUploader:
 if __name__ == "__main__":
 
     #Change those variables 
-    root_dir = 'path/to/folder'
+    root_dir = '/path/to'
     site = 'site' # name of a Dropbox folder
     database = 'db_name'
-    days = 1 # delete Dropbox files older than days
-    bitrix_framework = True # for bitrix CMS
+    days = 2 # delete Dropbox files older than days
+    bitrix_framework = True
 
-    #Dropbox app key, secret, and refresh token
     CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
     APP_KEY = ''
     APP_SECRET = ''
