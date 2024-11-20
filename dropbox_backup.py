@@ -146,8 +146,9 @@ if __name__ == "__main__":
     site = 'site' # name of a Dropbox folder
     database = 'db_name'
     days = 2 # delete Dropbox files older than days
-    bitrix_framework = True
-
+    bitrix_framework = True # for bitrix CMS
+    
+    #Dropbox app key, secret, and refresh token
     CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
     APP_KEY = ''
     APP_SECRET = ''
