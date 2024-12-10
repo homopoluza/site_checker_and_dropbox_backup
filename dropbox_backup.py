@@ -9,6 +9,7 @@ import smtplib
 from email.mime.text import MIMEText
 import concurrent.futures
 from functools import partial
+from dotenv import load_dotenv
 
 class DropboxUploader:
     def __init__(self, CHUNK_SIZE, path, days, app_key, app_secret, refresh_token):
@@ -90,11 +91,11 @@ class DropboxUploader:
 
     def send_email(self, site, api_err):
         # Email settings
-        smtp_server = ''
-        smtp_port = 587
-        email_login = ''
-        email_password = ''
-        email_to = ''
+        smtp_server = os.getenv('SMTP_SERVER')
+        smtp_port = int(os.getenv('SMTP_PORT'))
+        email_login = os.getenv('EMAIL_LOGIN')
+        email_password = os.getenv('EMAIL_PASS')
+        email_to = os.getenv('EMAIL_TO')
 
         msg = MIMEText(f"The site {site} returned status code or error {api_err}.")
         msg['Subject'] = f"{site} - backup {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -138,23 +139,23 @@ class DropboxUploader:
 
         except Exception as err:
             self.send_email(site, err)
-        
-if __name__ == "__main__":
 
-    #Change those variables 
-    root_dir = '/path/to'
-    site = 'site' # name of a Dropbox folder
-    database = 'db_name'
-    days = 2 # delete Dropbox files older than days
-    bitrix_framework = True # for bitrix CMS
+# Load environment variables from .env file
+load_dotenv()
+
+if __name__ == "__main__":
+    # Script settings
+    root_dir = os.getenv('ROOT_DIR')
+    site = os.getenv('DROPBOX_FOLDER')
+    database = os.getenv('DB_DATABASE')
+    days = int(os.getenv('DAYS')) # delete Dropbox files older than days
+    bitrix_framework = os.getenv('BITRIX') =='True' # for bitrix CMS
     
     #Dropbox app key, secret, and refresh token
     CHUNK_SIZE = 8 * 1024 * 1024 # 8MB
-    APP_KEY = ''
-    APP_SECRET = ''
-    #Get AUTHORIZATION_CODE https://www.dropbox.com/oauth2/authorize?client_id={APP_KEY}&response_type=code&token_access_type=offline
-    #Get permanent REFRESH_TOKEN https://api.dropboxapi.com/oauth2/token?code=AUTHORIZATION_CODE&grant_type=authorization_code&client_id=APP_KEY&client_secret=APP_SECRET
-    REFRESH_TOKEN = ''
+    APP_KEY = os.getenv('APP_KEY')
+    APP_SECRET = os.getenv('APP_SECRET')
+    REFRESH_TOKEN = os.getenv('REFRESH_TOKEN')
 
     dropbox_path = "/" + site
     uploader = DropboxUploader(CHUNK_SIZE, dropbox_path, days, APP_KEY, APP_SECRET, REFRESH_TOKEN)
@@ -169,7 +170,7 @@ if __name__ == "__main__":
         database_dump_name = database + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.sql'
         archive_path = shutil.make_archive(archive_name, 'tar', root_dir)
         archive_name = os.path.basename(archive_path)
-        command = f"mysqldump -u root {database} > {database_dump_name}"
+        command = f"mysqldump --defaults-file=$PWD/.my.cnf {database} > {database_dump_name}"
         subprocess.run(command, shell=True)
         archive_size = os.path.getsize(f"./{archive_name}")
         database_dump_size = os.path.getsize(f"./{database_dump_name}")
